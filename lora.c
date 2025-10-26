@@ -3,7 +3,7 @@
 
 // info()
 static mp_obj_t py_lora_info(void) {
-    return MP_OBJ_NEW_SMALL_INT(42);
+    return MP_OBJ_NEW_SMALL_INT(43);
 }
 MP_DEFINE_CONST_FUN_OBJ_0(lora_info_obj, py_lora_info);
 
