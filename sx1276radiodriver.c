@@ -172,7 +172,7 @@ void sx1276_tx(uint8_t *payload, size_t payload_length){
     sx1276_write_fifo(payload, payload_length);
     sx1276_write_register(REG_40_DIO_MAPPING1, 0x40);
     sx1276_write_register(REG_01_OP_MODE, MODE_TX | MODE_LONG_RANGE);
-    uint8_t irq = sx1276_read_register(REG_12_IRQ_FLAGS);
+    //uint8_t irq = sx1276_read_register(REG_12_IRQ_FLAGS);
 }
 
 void sx1276_rx_single(){
