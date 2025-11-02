@@ -1,32 +1,13 @@
 #include "sx1276radiodriver.h"
 
-#include "esp_log.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "hal/spi_types.h"
 
-#define TAG "SX1276"
+const int FXOSC = 32000000;
+
+const float FSTEP_DEN = 524288;
 
 static spi_device_handle_t spi_handle;
 
-struct spi_transaction_t spi;
-
-const float FXOSC = 32000000.0;
-
-const float FSTEP = (FXOSC / 524288);
-
-
-
-static sx1276_state_t sx1276_state ={
-    EU_868_FREQ,
-    0x0008,
-    SF_7,
-    BW_125K,
-    CR_45,
-    CRC_ENABLE,
-    14,
-    PA_SELECT
-};
+static sx1276_state_t sx1276_state;
 
 
 //SX1276 functions
@@ -39,6 +20,7 @@ esp_err_t sx1276_init(){
         .sclk_io_num = SPI_SCK_PIN,
         .quadwp_io_num = -1, //NOT USED
         .quadhd_io_num = -1, //NOT USED
+        .max_transfer_sz = 260,
     };
 
     spi_device_interface_config_t devcfg = {
@@ -46,6 +28,7 @@ esp_err_t sx1276_init(){
         .mode = 0,   //CPOL = 0 & CPHA = 0  for SX1276
         .spics_io_num = SPI_CS_PIN,
         .queue_size = 1, // à verifier
+        .flags = 0,
     };
     esp_err_t ret_value;
      
@@ -62,6 +45,20 @@ esp_err_t sx1276_init(){
     gpio_set_direction(DIO0_PIN, GPIO_MODE_INPUT);
 
     sx1276_reset();
+
+
+    static sx1276_state_t sx1276_state = {
+    .frequency = EU_868_FREQ,
+    .preamble = 0x0008,
+    .symb_timeout = 0x0010,
+    .spreading_factor = SF_7,
+    .bandwidth = BW_125K,
+    .coding_rate = CR_45,
+    .crc = CRC_ENABLE,
+    .power = 14,
+    .pa_select = PA_SELECT,
+    .sync_word = SYNC_WORD_PRIVATE
+    };
 
     sx1276_write_register(REG_01_OP_MODE, MODE_SLEEP | MODE_LONG_RANGE);
     sx1276_write_register(REG_01_OP_MODE, MODE_STDBY | MODE_LONG_RANGE);
@@ -80,13 +77,18 @@ esp_err_t sx1276_init(){
     set_preamble(0x0008);
     
     //Frequency
-    set_frequency(EU_868_FREQ);
+    set_frequency(EU_868_1);
+
+    //Sync Word
+    sx1276_write_register(REG_39_SYNC_WORD, SYNC_WORD_PRIVATE);
 
     //TX Power
     //set_tx_power(14);
     //To Delete
     sx1276_write_register(REG_4D_PA_DAC, PA_DAC_HIGH_POWER | PA_SELECT); 
     sx1276_write_register(REG_09_PA_CONFIG, 0x8F);
+
+
 
     sx1276_write_register(REG_01_OP_MODE, MODE_SLEEP | MODE_LONG_RANGE);
 
@@ -95,7 +97,7 @@ esp_err_t sx1276_init(){
 
 }
 
-void sx1276_reset(){
+esp_err_t sx1276_reset(){
     ESP_LOGI(TAG, "Reset SX1276 ...");
     gpio_set_level(RST_PIN, 0);
     vTaskDelay(pdMS_TO_TICKS(50));
@@ -104,9 +106,10 @@ void sx1276_reset(){
     ESP_LOGI(TAG, "SX1276 reset done !");
     uint8_t reg_version = sx1276_read_register(0x42);
     ESP_LOGI(TAG, "SX1276 reset done ! Version = %d", reg_version);
+    return ESP_OK;
 }
 
-void sx1276_write_register(uint8_t register_address, uint8_t value) {
+esp_err_t sx1276_write_register(uint8_t register_address, uint8_t value) {
     uint8_t tx[2] = {(uint8_t)(register_address | 0x80), value};
     spi_transaction_t t = {
         .length = 8 * 2,
@@ -114,22 +117,26 @@ void sx1276_write_register(uint8_t register_address, uint8_t value) {
         .flags = 0
     };
     spi_device_polling_transmit(spi_handle, &t);
+    return ESP_OK;
 }
 
 uint8_t sx1276_read_register(uint8_t register_address) {
     uint8_t tx[2] = {(uint8_t)(register_address & 0x7F), 0x00};
     uint8_t rx[2] = {0};
     spi_transaction_t t = {
-        .length = 8 * 2, //2 bytes 
+        .length = 8 * 2,
         .tx_buffer = tx,
         .rx_buffer = rx,
-        .flags = 0
+        .flags = 0,
     };
     spi_device_polling_transmit(spi_handle, &t);
     return rx[1];
 }
 
-void sx1276_write_fifo(uint8_t* data, size_t length){
+
+
+void sx1276_write_fifo(uint8_t *data, size_t length) {
+
     if(length > 255) length = 255; // FIFO payload limit
 
     uint8_t fifo_array[FIFO_MAX_SIZE]; //stack better than heap
@@ -145,6 +152,8 @@ void sx1276_write_fifo(uint8_t* data, size_t length){
 }
 
 
+
+
 void sx1276_read_fifo(uint8_t *data, size_t length){
     if (length > 255) length = 255; 
 
@@ -158,6 +167,7 @@ void sx1276_read_fifo(uint8_t *data, size_t length){
         .flags = 0            
     };
 
+    
     spi_device_polling_transmit(spi_handle, &t);
 
     memcpy(data, &fifo_data[1], length);
@@ -165,29 +175,104 @@ void sx1276_read_fifo(uint8_t *data, size_t length){
 
 
 // TX AND RX IMPLEMENTATION OF STATE MACHINE, SEE DOC
-void sx1276_tx(uint8_t *payload, size_t payload_length){
+esp_err_t sx1276_tx(uint8_t *payload, size_t payload_length){
     sx1276_write_register(REG_01_OP_MODE, MODE_STDBY | MODE_LONG_RANGE);
     sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
     sx1276_write_register(REG_0D_FIFO_ADDR_PTR, 0x00);
+    sx1276_write_register(REG_22_PAYLOAD_LENGTH, payload_length);
     sx1276_write_fifo(payload, payload_length);
-    sx1276_write_register(REG_40_DIO_MAPPING1, 0x40);
+    sx1276_write_register(REG_40_DIO_MAPPING1, DIO_TX_DONE);
     sx1276_write_register(REG_01_OP_MODE, MODE_TX | MODE_LONG_RANGE);
-    //uint8_t irq = sx1276_read_register(REG_12_IRQ_FLAGS);
-}
-
-void sx1276_rx_single(){
     
+    uint8_t irq_flags = 0;
+    uint32_t start_time = xTaskGetTickCount();
+
+    while(1){
+        irq_flags = sx1276_read_register(REG_12_IRQ_FLAGS);
+        if (irq_flags & IRQ_TX_DONE){
+            sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
+            ESP_LOGI(TAG, "TX done (polling mode)");
+            return ESP_OK;
+        }
+        if ((xTaskGetTickCount() - start_time) > pdMS_TO_TICKS(50000)){
+            ESP_LOGE(TAG, "TX timeout");
+            sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
+            return ESP_ERR_TIMEOUT;
+        }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
 }
 
+/*
+esp_err_t sx1276_rx_single(uint8_t *payload, size_t* payload_length){
+    sx1276_write_register(REG_01_OP_MODE, MODE_STDBY | MODE_LONG_RANGE);
+    sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
+    sx1276_write_register(REG_0D_FIFO_ADDR_PTR, 0x00);
+    sx1276_write_register(REG_40_DIO_MAPPING1, DIO_RX_DONE);
+    sx1276_write_register(REG_01_OP_MODE, MODE_RX_SINGLE | MODE_LONG_RANGE);
+
+    uint32_t start_time = xTaskGetTickCount();
+    uint8_t irq_flags = 0;
+
+    while(1){
+        irq_flags = sx1276_read_register(REG_12_IRQ_FLAGS);
+        if(irq_flags & IRQ_RX_DONE){
+
+            // Check for CRC error
+            if(irq_flags & IRQ_PAYLOAD_CRC_ERROR){
+                sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
+                ESP_LOGE(TAG, "RX CRC error");
+                return ESP_ERR_INVALID_CRC;
+            }
+
+            // Read number of received bytes
+            //if(payload_length > 64) payload_length = 64;
+            size_t len = sx1276_read_register(REG_13_RX_NB_BYTES);
+            //if(len > payload_length) len = payload_length; // avoid overflow
+            *payload_length = len;
+
+            // Set FIFO address to start of received packet
+            uint8_t fifo_addr = sx1276_read_register(REG_10_FIFO_RX_CURRENT_ADDR);
+            sx1276_write_register(REG_0D_FIFO_ADDR_PTR, fifo_addr);
+
+            // Read payload from FIFO
+            sx1276_read_fifo(payload, *payload_length);
+
+            // Clear IRQ flags
+            sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
+
+            ESP_LOGI(TAG, "RX done (polling mode), %d bytes received", len);
+            return ESP_OK;
+        }
+
+        if (irq_flags & IRQ_RX_TIMEOUT) {
+            sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
+            ESP_LOGW(TAG, "RX symbol timeout");
+            return ESP_ERR_TIMEOUT;
+        }
+
+        // Timeout
+        if ((xTaskGetTickCount() - start_time) > pdMS_TO_TICKS(10000)){
+            sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
+            ESP_LOGE(TAG, "RX timeout");
+            return ESP_ERR_TIMEOUT;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
+*/
+
+/*
 void sx1276_rx_continuous(){
-    
 }
+*/
 
 // Getters and setters
 void set_frequency(uint32_t freq_Hz){
     if(freq_Hz > EU_FREQ_UPPER_BOUND) freq_Hz = EU_FREQ_UPPER_BOUND;
     else if(freq_Hz < EU_FREQ_LOWER_BOUND) freq_Hz = EU_FREQ_LOWER_BOUND;
-    uint32_t frf = (uint32_t)((float)freq_Hz / FSTEP);
+   uint32_t frf = (freq_Hz * FSTEP_DEN + FXOSC/2) / FXOSC;
     sx1276_write_register(REG_06_FRF_MSB, (frf >> 16) & 0xFF);
     sx1276_write_register(REG_07_FRF_MID, (frf >> 8) & 0xFF);
     sx1276_write_register(REG_08_FRF_LSB, frf & 0xFF);
@@ -197,8 +282,8 @@ uint32_t get_chip_frequency(){
     uint8_t msb = sx1276_read_register(REG_06_FRF_MSB);
     uint8_t mid = sx1276_read_register(REG_07_FRF_MID);
     uint8_t lsb = sx1276_read_register(REG_08_FRF_LSB);
-    uint32_t frf = (uint32_t)((msb << 16) | (mid << 8) | lsb);
-    float freq_Hz = frf * FSTEP;
+    uint32_t frf = ((uint32_t)msb << 16) | ((uint32_t)mid << 8) | lsb;
+    uint32_t freq_Hz = (frf * FXOSC + FSTEP_DEN/2) / FSTEP_DEN;
     return freq_Hz;
 }
 
@@ -210,6 +295,18 @@ void set_preamble(uint16_t preamble){
     if(preamble < 0x0006) preamble = 0x0006;
     sx1276_write_register(REG_20_PREAMBLE_MSB, (preamble >> 8) & 0xFF);
     sx1276_write_register(REG_21_PREAMBLE_LSB, preamble & 0xFF);
+    uint16_t symb_timeout = preamble + 100   ;
+
+    // limit of 10-bit => max value = 1023
+    if (symb_timeout > 1023) symb_timeout = 1023;
+
+    uint8_t modem_config_2 = sx1276_read_register(REG_1E_MODEM_CONFIG2);
+    modem_config_2 = (modem_config_2 & 0xFC) | ((symb_timeout >> 8) & 0x03);
+    sx1276_write_register(REG_1E_MODEM_CONFIG2, modem_config_2);
+    sx1276_write_register(REG_1F_SYMB_TIMEOUT_LSB, symb_timeout & 0xFF);
+    sx1276_state.preamble = preamble;
+    sx1276_state.symb_timeout = symb_timeout;
+
 }
 
 unsigned int get_chip_preamble(){
@@ -222,6 +319,7 @@ unsigned int get_chip_preamble(){
 unsigned int get_preamble(){
     return sx1276_state.preamble;
 }
+
 /*
 //Table 33 Power Amplifier Mode Selection Truth Table (SX1276 doc)
 void set_tx_power(uint8_t dbm_power){
@@ -233,5 +331,70 @@ void set_tx_power(uint8_t dbm_power){
     else if(dbm_power < 0x02) dbm_power = 0x02; //Min Power
 }
 
+//from pycom
+void SX1276SetRfTxPower( int8_t power )
+{
+    uint8_t paConfig = 0;
+    uint8_t paDac = 0;
+
+    paConfig = SX1276Read( REG_PACONFIG );
+    paDac = SX1276Read( REG_PADAC );
+
+    paConfig = ( paConfig & RF_PACONFIG_PASELECT_MASK ) | SX1276GetPaSelect( SX1276.Settings.Channel );
+    paConfig = ( paConfig & RF_PACONFIG_MAX_POWER_MASK ) | 0x70;
+
+    if( ( paConfig & RF_PACONFIG_PASELECT_PABOOST ) == RF_PACONFIG_PASELECT_PABOOST )
+    {
+        if( power > 17 )
+        {
+            paDac = ( paDac & RF_PADAC_20DBM_MASK ) | RF_PADAC_20DBM_ON;
+        }
+        else
+        {
+            paDac = ( paDac & RF_PADAC_20DBM_MASK ) | RF_PADAC_20DBM_OFF;
+        }
+        if( ( paDac & RF_PADAC_20DBM_ON ) == RF_PADAC_20DBM_ON )
+        {
+            if( power < 5 )
+            {
+                power = 5;
+            }
+            if( power > 20 )
+            {
+                power = 20;
+            }
+            paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power - 5 ) & 0x0F );
+        }
+        else
+        {
+            if( power < 2 )
+            {
+                power = 2;
+            }
+            if( power > 17 )
+            {
+                power = 17;
+            }
+            paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power - 2 ) & 0x0F );
+        }
+    }
+    else
+    {
+        if( power < -1 )
+        {
+            power = -1;
+        }
+        if( power > 14 )
+        {
+            power = 14;
+        }
+        paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power + 1 ) & 0x0F );
+    }
+    SX1276Write( REG_PACONFIG, paConfig );
+    SX1276Write( REG_PADAC, paDac );
+}
+
+
 */
+// DATA !!! check pycom doc for stat
 
