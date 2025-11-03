@@ -48,6 +48,7 @@ static mp_obj_t lora_LoRa_reset(mp_obj_t self_in) {
 MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_reset_obj, lora_LoRa_reset);
 
 
+//// LoRa.tx()
 static mp_obj_t lora_LoRa_tx(mp_obj_t self_in, mp_obj_t user_data) {
     mp_buffer_info_t buffer_info;
     mp_get_buffer_raise(user_data, &buffer_info, MP_BUFFER_READ);   // Extract bytes
@@ -60,20 +61,40 @@ static mp_obj_t lora_LoRa_tx(mp_obj_t self_in, mp_obj_t user_data) {
 MP_DEFINE_CONST_FUN_OBJ_2(lora_LoRa_tx_obj, lora_LoRa_tx);
 
 
+//// LoRa.frequency()
+static mp_obj_t lora_LoRa_frequency(size_t n_args, const mp_obj_t *args) {
+    _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-/*
+    if (n_args == 1) {
+        // Getter
+        uint32_t frequency = get_chip_frequency();
+        return mp_obj_new_int(frequency);
+    } else if (n_args == 2) {
+        // Setter
+        uint32_t freq = mp_obj_get_int(args[1]);
+        set_frequency(freq);
+        return mp_const_none;
+    }
+    // If any other argument ...
+    mp_raise_TypeError(MP_ERROR_TEXT("Wrong number of arguments"));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lora_LoRa_frequency_obj,1, 2, lora_LoRa_frequency);
+
+
+
+
 static mp_obj_t lora_LoRa_rx(mp_obj_t self_in) {
     uint8_t data[256];
     size_t len = sizeof(data);
     esp_err_t esp_err = sx1276_rx_single(data, &len);
     if(esp_err != ESP_OK) {
-        mp_raise_ValueError(MP_ERROR_TEXT("Could not receive any data"));
+        //mp_raise_ValueError(MP_ERROR_TEXT("Could not receive any data"));
         return mp_const_none;
     }
     return mp_obj_new_bytes(data, len);
 }
 MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_rx_obj, lora_LoRa_rx);
-*/
+
 
 ////////////TESTS, DON'T UNCOMMENT
 /*
@@ -96,12 +117,13 @@ MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_debugfrequency_obj, lora_LoRa_debugfrequency
 
 // Methods, constants and statics from object LoRa
 static const mp_rom_map_elem_t lora_locals_dict_table[] = {
-    { MP_ROM_QSTR(MP_QSTR_modelora), MP_ROM_INT(LORA_MODE_LORAWAN) },
-    { MP_ROM_QSTR(MP_QSTR_eu868), MP_ROM_INT(LORA_REGION_EU868) },
+    { MP_ROM_QSTR(MP_QSTR_LORA), MP_ROM_INT(LORA_MODE_LORA) },
+    { MP_ROM_QSTR(MP_QSTR_EU868), MP_ROM_INT(LORA_REGION_EU868) },
 
     { MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&lora_LoRa_reset_obj) },
     { MP_ROM_QSTR(MP_QSTR_tx), MP_ROM_PTR(&lora_LoRa_tx_obj) },
-    //{ MP_ROM_QSTR(MP_QSTR_rx), MP_ROM_PTR(&lora_LoRa_rx_obj) },
+    { MP_ROM_QSTR(MP_QSTR_frequency), MP_ROM_PTR(&lora_LoRa_frequency_obj) },
+    { MP_ROM_QSTR(MP_QSTR_rx), MP_ROM_PTR(&lora_LoRa_rx_obj) },
     { MP_ROM_QSTR(MP_QSTR_debugfrequency), MP_ROM_PTR(&lora_LoRa_debugfrequency_obj) },
 };
 static MP_DEFINE_CONST_DICT(lora_locals_dict, lora_locals_dict_table);

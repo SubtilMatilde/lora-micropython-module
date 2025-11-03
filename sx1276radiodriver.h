@@ -31,6 +31,7 @@
 #define REG_07_FRF_MID              0x07
 #define REG_08_FRF_LSB              0x08
 #define REG_09_PA_CONFIG            0x09
+#define REG_0C_LNA                  0x0C
 #define REG_0D_FIFO_ADDR_PTR        0x0D
 #define REG_0E_FIFO_TX_BASE_ADDR    0x0E
 #define REG_0F_FIFO_RX_BASE_ADDR    0x0F
@@ -121,19 +122,22 @@
 #define SYNC_WORD_PRIVATE 0x12
 #define SYNC_WORD_PUBLIC  0x34
 
+// Frequency
+#define FREQ_STEP           61.03515625 //F(XOSC)/2**19
+#define EU_FREQ_UPPER_BOUND 870000000UL //870MHz
+#define EU_FREQ_LOWER_BOUND 863000000UL //863MHz
+#define EU_868_FREQ         868000000UL //868MHz
+#define EU_868_1            868100000UL //868.1MHz
+#define EU_868_3            868300000UL //868.3MHz
+#define EU_868_5            868500000UL //868.5MHz
+
 // Others
 #define FIFO_MAX_SIZE 256
-
-#define EU_FREQ_UPPER_BOUND 870e6 //870MHz
-#define EU_FREQ_LOWER_BOUND 863e6 //863MHz
-#define EU_868_FREQ         868e6 //868MHz
-#define EU_868_1            868.1e6 //868.1MHz
-#define EU_868_3            868.3e6 //868.3MHz
-#define EU_868_5            868.5e6 //868.5MHz
-
-
 #define MIN_PREAMBLE 0x0006
 #define MAX_PREAMBLE 0xFFFF //65535
+#define LNA_GAIN_G1  0x40
+#define AGC_LNA      0x00
+#define AGC_LOOP     0x04
 
 
 // Useful Struct to hold info
