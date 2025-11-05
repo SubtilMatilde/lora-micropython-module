@@ -1,7 +1,6 @@
 # lora-micropython-module
 
-<details>
-<summary><h2>Cloning 2</h2></summary
+## Cloning and project structure
 Clone MicroPython and ESP-IDF
 ```bash
 git clone -b v5.5.1 --recursive https://github.com/espressif/esp-idf.git
@@ -23,10 +22,8 @@ project/
       ├─ sx1276radiodriver.c
       └─ sx1276radiodriver.h
 ```
-</details>
-<details>
-<summary><h2>How to Build</h2></summary
-### In the same console:
+## How to build 
+In the same console:
 ```bash
 cd esp-idf
 ./install.sh esp32 #Once
@@ -40,4 +37,3 @@ make USER_C_MODULES=../../../../modules/micropython.cmake
 idf.py build -DUSER_C_MODULES=../../../../modules/micropython.cmake
 idf.py flash
 ```
-</details>
