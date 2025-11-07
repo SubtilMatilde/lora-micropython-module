@@ -10,6 +10,7 @@
 #define LORA_REGION_EU868 0
 
 
+
 //Global
 // info()
 static mp_obj_t lora_info() {
@@ -21,35 +22,28 @@ MP_DEFINE_CONST_FUN_OBJ_0(lora_info_obj, lora_info);
 //Class
 typedef struct _lora_obj_t {
     mp_obj_base_t base;
-    uint8_t* value;
     int mode;
     int region;
-    //sx1276_state_t state;
+    sx1276_state_t state;
 } _lora_LoRa_obj_t;
 
+static _lora_LoRa_obj_t *singleton_instance = NULL;
 
 //// Constructor
-static mp_obj_t lora_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {    
+static mp_obj_t lora_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) { 
+    if (singleton_instance != NULL) {
+        return MP_OBJ_FROM_PTR(singleton_instance);
+    } 
     _lora_LoRa_obj_t *self = mp_obj_malloc(_lora_LoRa_obj_t, type);
+    singleton_instance = self;
     esp_err_t esp_err = sx1276_init();
-    if(esp_err != ESP_OK) mp_raise_ValueError(MP_ERROR_TEXT("Could not initialize RFM95"));
+    if(esp_err != ESP_OK) mp_raise_ValueError(MP_ERROR_TEXT("Could not initialize sx1276"));
     //self->id = mp_obj_get_int(args[0]);
     return MP_OBJ_FROM_PTR(self);
 }
 
-
-//// LoRa.reset()
-static mp_obj_t lora_LoRa_reset(mp_obj_t self_in) {
-    _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    esp_err_t esp_err = sx1276_reset();
-    if(esp_err != ESP_OK) mp_raise_ValueError(MP_ERROR_TEXT("Could not initialize RFM95"));
-    return mp_const_none;
-}
-MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_reset_obj, lora_LoRa_reset);
-
-
-//// LoRa.tx()
-static mp_obj_t lora_LoRa_tx(mp_obj_t self_in, mp_obj_t user_data) {
+//// LoRa.send()
+static mp_obj_t lora_LoRa_send(mp_obj_t self_in, mp_obj_t user_data) {
     mp_buffer_info_t buffer_info;
     mp_get_buffer_raise(user_data, &buffer_info, MP_BUFFER_READ);   // Extract bytes
     uint8_t *data = buffer_info.buf;
@@ -58,7 +52,20 @@ static mp_obj_t lora_LoRa_tx(mp_obj_t self_in, mp_obj_t user_data) {
     if(esp_err != ESP_OK) mp_raise_ValueError(MP_ERROR_TEXT("Could not transmit any data"));
     return mp_const_true;
 }
-MP_DEFINE_CONST_FUN_OBJ_2(lora_LoRa_tx_obj, lora_LoRa_tx);
+MP_DEFINE_CONST_FUN_OBJ_2(lora_LoRa_send_obj, lora_LoRa_send);
+
+//// LoRa.recv()
+static mp_obj_t lora_LoRa_recv(mp_obj_t self_in) {
+    uint8_t data[256];
+    size_t len = sizeof(data);
+    esp_err_t esp_err = sx1276_rx_single(data, &len);
+    if(esp_err != ESP_OK) {
+        //mp_raise_ValueError(MP_ERROR_TEXT("Could not receive any data"));
+        return mp_const_none;
+    }
+    return mp_obj_new_bytes(data, len);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_recv_obj, lora_LoRa_recv);
 
 
 //// LoRa.frequency()
@@ -80,20 +87,15 @@ static mp_obj_t lora_LoRa_frequency(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lora_LoRa_frequency_obj,1, 2, lora_LoRa_frequency);
 
-
-
-
-static mp_obj_t lora_LoRa_rx(mp_obj_t self_in) {
-    uint8_t data[256];
-    size_t len = sizeof(data);
-    esp_err_t esp_err = sx1276_rx_single(data, &len);
-    if(esp_err != ESP_OK) {
-        //mp_raise_ValueError(MP_ERROR_TEXT("Could not receive any data"));
-        return mp_const_none;
-    }
-    return mp_obj_new_bytes(data, len);
+//// LoRa.deinit()
+static mp_obj_t lora_LoRa_deinit(mp_obj_t self_in) {
+        _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(self_in);
+        singleton_instance = NULL;
+        esp_err_t esp_err = sx1276_deinit();
+        if(esp_err != ESP_OK) mp_raise_ValueError(MP_ERROR_TEXT("Could not deinit sx1276"));
+        return mp_const_true;
 }
-MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_rx_obj, lora_LoRa_rx);
+MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_deinit_obj, lora_LoRa_deinit);
 
 
 ////////////TESTS, DON'T UNCOMMENT
@@ -106,7 +108,7 @@ static mp_obj_t lora_LoRa_read_register(mp_obj_t self_in, mp_obj_t addr_in) {
     return mp_obj_new_int(value);
 }
 MP_DEFINE_CONST_FUN_OBJ_2(lora_LoRa_readregister_obj, lora_LoRa_read_register);
-*/
+
 
 static mp_obj_t lora_LoRa_debugfrequency(mp_obj_t self_in) {
     _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -115,16 +117,32 @@ static mp_obj_t lora_LoRa_debugfrequency(mp_obj_t self_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_debugfrequency_obj, lora_LoRa_debugfrequency);
 
+
+//// LoRa.reset()
+static mp_obj_t lora_LoRa_reset(mp_obj_t self_in) {
+    _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    esp_err_t esp_err = sx1276_reset();
+    if(esp_err != ESP_OK) mp_raise_ValueError(MP_ERROR_TEXT("Could not initialize RFM95"));
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_reset_obj, lora_LoRa_reset);
+
+*/
+
 // Methods, constants and statics from object LoRa
 static const mp_rom_map_elem_t lora_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_LORA), MP_ROM_INT(LORA_MODE_LORA) },
     { MP_ROM_QSTR(MP_QSTR_EU868), MP_ROM_INT(LORA_REGION_EU868) },
 
-    { MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&lora_LoRa_reset_obj) },
-    { MP_ROM_QSTR(MP_QSTR_tx), MP_ROM_PTR(&lora_LoRa_tx_obj) },
+    
+    { MP_ROM_QSTR(MP_QSTR_send), MP_ROM_PTR(&lora_LoRa_send_obj) },
+    { MP_ROM_QSTR(MP_QSTR_recv), MP_ROM_PTR(&lora_LoRa_recv_obj) },
     { MP_ROM_QSTR(MP_QSTR_frequency), MP_ROM_PTR(&lora_LoRa_frequency_obj) },
-    { MP_ROM_QSTR(MP_QSTR_rx), MP_ROM_PTR(&lora_LoRa_rx_obj) },
-    { MP_ROM_QSTR(MP_QSTR_debugfrequency), MP_ROM_PTR(&lora_LoRa_debugfrequency_obj) },
+    { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&lora_LoRa_deinit_obj) },
+    
+    //{ MP_ROM_QSTR(MP_QSTR_debugfrequency), MP_ROM_PTR(&lora_LoRa_debugfrequency_obj) },
+    //{ MP_ROM_QSTR(MP_QSTR_readregister), MP_ROM_PTR(&lora_LoRa_readregister_obj) },
+    //{ MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&lora_LoRa_reset_obj) },
 };
 static MP_DEFINE_CONST_DICT(lora_locals_dict, lora_locals_dict_table);
 

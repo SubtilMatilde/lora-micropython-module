@@ -7,6 +7,7 @@ static spi_device_handle_t spi_handle;
 static sx1276_state_t sx1276_state;
 
 
+
 //SX1276 functions
 esp_err_t sx1276_init(){
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -44,17 +45,18 @@ esp_err_t sx1276_init(){
     sx1276_reset();
 
 
-    static sx1276_state_t sx1276_state = {
-    .frequency = EU_868_FREQ,
-    .preamble = 0x0008,
-    .symb_timeout = 0x0010,
-    .spreading_factor = SF_7,
-    .bandwidth = BW_125K,
-    .coding_rate = CR_45,
-    .crc = CRC_ENABLE,
-    .power = 14,
-    .pa_select = PA_SELECT,
-    .sync_word = SYNC_WORD_PRIVATE
+    sx1276_state_t sx1276_state = {
+        .instanciated = 0x01,
+        .frequency = EU_868_FREQ,
+        .preamble = 0x0008,
+        .symb_timeout = 0x0010,
+        .spreading_factor = SF_7,
+        .bandwidth = BW_125K,
+        .coding_rate = CR_45,
+        .crc = CRC_ENABLE,
+        .power = 14,
+        .pa_select = PA_SELECT,
+        .sync_word = SYNC_WORD_PRIVATE
     };
 
     sx1276_write_register(REG_01_OP_MODE, MODE_SLEEP | MODE_LONG_RANGE);
@@ -81,8 +83,8 @@ esp_err_t sx1276_init(){
 
     //TX Power
     //set_tx_power(14);
-    //To Delete
-    sx1276_write_register(REG_4D_PA_DAC, PA_DAC_HIGH_POWER | PA_SELECT); 
+
+    sx1276_write_register(REG_4D_PA_DAC, PA_HIGH_POWER | PA_SELECT); 
     sx1276_write_register(REG_09_PA_CONFIG, 0x8F);
 
     //Gain
@@ -274,11 +276,13 @@ void sx1276_rx_continuous(uint8_t *payload, size_t* payload_length){
 
     while(1){
         irq_flags = sx1276_read_register(REG_12_IRQ_FLAGS);
-        // Check for CRC error
-        if(irq_flags & IRQ_PAYLOAD_CRC_ERROR){
-            sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
-        }
-        else{
+        if(irq_flags & IRQ_RX_DONE){
+
+            // Check for CRC error
+            if(irq_flags & IRQ_PAYLOAD_CRC_ERROR){
+                sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
+            }
+
             // Read number of received bytes
             //if(payload_length > 64) payload_length = 64;
             size_t len = sx1276_read_register(REG_13_RX_NB_BYTES);
@@ -295,7 +299,7 @@ void sx1276_rx_continuous(uint8_t *payload, size_t* payload_length){
             // Clear IRQ flags
             sx1276_write_register(REG_12_IRQ_FLAGS, 0xFF);
 
-            ESP_LOGI(TAG, "RX done (polling mode), %d bytes received", len);
+            //ESP_LOGI(TAG, "RX done (polling mode), %d bytes received", len);
         }
     }
 }
@@ -359,80 +363,75 @@ unsigned int get_preamble(){
 }
 
 /*
-//Table 33 Power Amplifier Mode Selection Truth Table (SX1276 doc)
-void set_tx_power(uint8_t dbm_power){
-    uint8_t pa_cfg = 0x00;
-    uint8_t pa_dac = PA_DAC_DEFAULT;
-    if(dbm_power > 0x0E) pa_cfg = PA_SELECT; //Higher than 14 -> SELECT PA BOOST
-    
-    if(dbm_power > 0x14) dbm_power = 0x14; //Max power = 20
-    else if(dbm_power < 0x02) dbm_power = 0x02; //Min Power
+void sx1276_config_ocp() {
+    //TODO
 }
-
-//from pycom
-void SX1276SetRfTxPower( int8_t power )
-{
-    uint8_t paConfig = 0;
-    uint8_t paDac = 0;
-
-    paConfig = SX1276Read( REG_PACONFIG );
-    paDac = SX1276Read( REG_PADAC );
-
-    paConfig = ( paConfig & RF_PACONFIG_PASELECT_MASK ) | SX1276GetPaSelect( SX1276.Settings.Channel );
-    paConfig = ( paConfig & RF_PACONFIG_MAX_POWER_MASK ) | 0x70;
-
-    if( ( paConfig & RF_PACONFIG_PASELECT_PABOOST ) == RF_PACONFIG_PASELECT_PABOOST )
-    {
-        if( power > 17 )
-        {
-            paDac = ( paDac & RF_PADAC_20DBM_MASK ) | RF_PADAC_20DBM_ON;
-        }
-        else
-        {
-            paDac = ( paDac & RF_PADAC_20DBM_MASK ) | RF_PADAC_20DBM_OFF;
-        }
-        if( ( paDac & RF_PADAC_20DBM_ON ) == RF_PADAC_20DBM_ON )
-        {
-            if( power < 5 )
-            {
-                power = 5;
-            }
-            if( power > 20 )
-            {
-                power = 20;
-            }
-            paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power - 5 ) & 0x0F );
-        }
-        else
-        {
-            if( power < 2 )
-            {
-                power = 2;
-            }
-            if( power > 17 )
-            {
-                power = 17;
-            }
-            paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power - 2 ) & 0x0F );
-        }
-    }
-    else
-    {
-        if( power < -1 )
-        {
-            power = -1;
-        }
-        if( power > 14 )
-        {
-            power = 14;
-        }
-        paConfig = ( paConfig & RF_PACONFIG_OUTPUTPOWER_MASK ) | ( uint8_t )( ( uint16_t )( power + 1 ) & 0x0F );
-    }
-    SX1276Write( REG_PACONFIG, paConfig );
-    SX1276Write( REG_PADAC, paDac );
-}
-
-
 */
+
+/*
+//Table 33 Power Amplifier Mode Selection Truth Table (SX1276 doc)
+void set_tx_power(int8_t power_dbm) {
+
+    uint8_t pa_config = 0;
+    uint8_t pa_dac = 0;
+    uint8_t p_out = 0;
+    // Select PA_BOOST for power >= 15 dBm, else -> RFO
+    bool usePaBoost = (power_dbm > 14);
+
+    if(usePaBoost){
+        // PaSelect = PA_BOOST
+        pa_config = PA_SELECT; 
+
+        // Values between 2 and 20 in PA_BOOST
+        if (power_dbm > 20) power_dbm = 20;
+        if (power_dbm < 2)  power_dbm = 2;
+
+        // High (+20dBm)
+        if (power_dbm > 17) {
+            pa_dac = PA_HIGH_POWER; 
+            // Pout = 20 - (15 - OutputPower) = -5 + OutputPower
+            pa_config |= (uint8_t)((power_dbm - 5) & 0x0F); 
+        } else {
+            // Default (max 17 dBm)
+            pa_dac = PA_DEFAULT_POWER;
+            // Pout = 17 - (15 - OutputPower) = 2 + OutputPower
+            pa_config |= (uint8_t)((power_dbm - 2) & 0x0F); 
+        }
+    }
+    else{
+        pa_config |= (1 << 4) * PA_MAX_POWER; // MaxPower = 0b111 -> Pmax = 15 dBm
+        pa_dac = PA_LOW_POWER;
+
+        // RFO range -1 dBm → +14 dBm
+        if (power_dbm > 14) power_dbm = 14;
+        if (power_dbm < -1) power_dbm = -1;
+
+        pa_config |= (uint8_t)((power_dbm + 1) & 0x0F);
+    }
+
+    sx1276_write_register(REG_4D_PA_DAC, pa_dac);
+    sx1276_write_register(REG_09_PA_CONFIG, pa_config);
+    sx1276_state.power = power_dbm;
+}
+*/
+
+
 // DATA !!! check pycom doc for stat
+
+
+esp_err_t sx1276_deinit(){
+    if (spi_handle) {
+        spi_bus_remove_device(spi_handle);
+        spi_handle = NULL;
+    }
+
+    esp_err_t ret = spi_bus_free(SPI2_HOST);
+    if (ret != ESP_OK) {
+        ESP_LOGI(TAG, "Failed to free SPI bus: %d", ret);
+    }
+    sx1276_reset();
+    return ESP_OK;
+}
+
+
 

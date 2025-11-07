@@ -75,9 +75,11 @@
 
 // Power Amplifier
 #define PA_SELECT         0x80
-#define PA_DAC_HIGH_POWER 0x07
-#define PA_DAC_DEFAULT    0x04
-#define MAX_POWER         0x70
+#define PA_RFO_PIN        0x00
+#define PA_LOW_POWER      0x04
+#define PA_MAX_POWER      0x70
+#define PA_HIGH_POWER     0x87
+#define PA_DEFAULT_POWER  0x84
 
 // Bandwidth
 #define BW_7K8   0x00
@@ -140,8 +142,11 @@
 #define AGC_LOOP     0x04
 
 
+
+
 // Useful Struct to hold info
 typedef struct {
+    uint8_t instanciated;
     uint32_t frequency;
     uint16_t preamble;
     uint16_t symb_timeout;
@@ -157,16 +162,24 @@ typedef struct {
 // Functions' Prototypes
 esp_err_t sx1276_init();
 esp_err_t sx1276_reset();
+
 uint8_t sx1276_read_register(uint8_t register_address);
 esp_err_t sx1276_write_register(uint8_t register_address, uint8_t value);
+
 void sx1276_write_fifo(uint8_t* data, size_t length);
 void sx1276_read_fifo(uint8_t* data, size_t length);
+
+
 esp_err_t sx1276_tx(uint8_t *payload, size_t payload_length);
 esp_err_t sx1276_rx_single(uint8_t *payload, size_t* payload_length);
+
 void set_frequency(uint32_t freq_Hz);
 uint32_t get_frequency();
 uint32_t get_chip_frequency();
+
 void set_preamble(uint16_t preamble);
 unsigned int get_preamble();
 unsigned int get_chip_preamble();
+
+esp_err_t sx1276_deinit();
 #endif
