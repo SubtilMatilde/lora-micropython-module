@@ -15,7 +15,7 @@ project/
    ├─ micropython.cmake
    ├─ README.md
    └─ lora-micropython-module/
-      ├─ lora.c
+      ├─ modlora.c
       ├─ micropython.cmake
       ├─ micropython.mk
       ├─ README.md

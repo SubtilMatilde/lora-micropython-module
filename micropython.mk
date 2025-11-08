@@ -1,1 +1,1 @@
-SRC_USERMOD_C += $(USERMOD_DIR)/lora.c
+SRC_USERMOD_C += $(USERMOD_DIR)/modlora.c
