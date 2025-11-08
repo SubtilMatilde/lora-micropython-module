@@ -50,7 +50,6 @@
 #define REG_42_VERSION              0x42
 #define REG_4D_PA_DAC               0x4D
 
-
 // Modes
 #define MODE_LONG_RANGE    0x80
 #define MODE_SLEEP         0x00
@@ -154,6 +153,7 @@ typedef struct {
     uint8_t bandwidth;
     uint8_t coding_rate;
     uint8_t crc;
+    uint8_t header_on;
     uint8_t power;
     uint8_t pa_select;
     uint8_t sync_word;
@@ -180,6 +180,14 @@ uint32_t get_chip_frequency();
 void set_preamble(uint16_t preamble);
 unsigned int get_preamble();
 unsigned int get_chip_preamble();
+
+void set_sf(uint8_t value);
+uint8_t get_sf();
+
+void set_bw(uint8_t value);
+uint8_t get_bw();
+
+void set_sync_word(uint8_t sync_word);
 
 esp_err_t sx1276_deinit();
 #endif

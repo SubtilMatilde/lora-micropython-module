@@ -6,8 +6,6 @@ static spi_device_handle_t spi_handle;
 
 static sx1276_state_t sx1276_state;
 
-
-
 //SX1276 functions
 esp_err_t sx1276_init(){
     esp_log_level_set(TAG, ESP_LOG_INFO);
@@ -362,6 +360,60 @@ unsigned int get_preamble(){
     return sx1276_state.preamble;
 }
 
+
+void set_sf(uint8_t value){
+    uint8_t sf = SF_7;
+    //uint8_t header = 0x00;
+    switch (value){
+    /*
+    case 6:
+        sf = SF_6;
+        header = 0x01;
+        break;
+    */
+    case 7:
+        sf = SF_7;
+        break;
+    case 8:
+        sf = SF_8;
+        break;
+    case 9:
+        sf = SF_9;
+        break;
+    case 10:
+        sf = SF_10;
+        break;
+    case 11:
+        sf = SF_11;
+        break;
+    case 12:
+        sf = SF_12;
+        break;
+    default:
+        sf = SF_7;
+        break;
+    }
+    sx1276_write_register(REG_1E_MODEM_CONFIG2, sf | sx1276_state.crc);
+    sx1276_state.spreading_factor = sf;
+    //sx1276_write_register(REG_1D_MODEM_CONFIG1, sx1276_state.bandwidth | sx1276_state.coding_rate |header);
+}
+
+uint8_t get_sf(){
+    return sx1276_state.spreading_factor;
+}
+
+
+
+void set_bw(uint8_t value){
+    sx1276_write_register(REG_1D_MODEM_CONFIG1, value | sx1276_state.coding_rate | sx1276_state.header_on);
+    sx1276_state.bandwidth = value;
+}
+
+void set_sync_word(uint8_t sync_word){
+    sx1276_write_register(REG_39_SYNC_WORD, sync_word);
+    sx1276_state.sync_word = sync_word;
+}
+
 /*
 void sx1276_config_ocp() {
     //TODO
@@ -420,6 +472,7 @@ void set_tx_power(int8_t power_dbm) {
 
 
 esp_err_t sx1276_deinit(){
+    sx1276_reset();
     if (spi_handle) {
         spi_bus_remove_device(spi_handle);
         spi_handle = NULL;
@@ -429,7 +482,7 @@ esp_err_t sx1276_deinit(){
     if (ret != ESP_OK) {
         ESP_LOGI(TAG, "Failed to free SPI bus: %d", ret);
     }
-    sx1276_reset();
+    
     return ESP_OK;
 }
 
