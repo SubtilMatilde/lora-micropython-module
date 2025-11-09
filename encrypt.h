@@ -1,3 +1,9 @@
+/*
+* The encryption Algorithms are inspired 
+* by Adafruit's TinyLoRa
+* https://github.com/adafruit/TinyLoRa
+*/
+
 #ifndef ENCRYPT_H
 #define ENCRYPT_H
 

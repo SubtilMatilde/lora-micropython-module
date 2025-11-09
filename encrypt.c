@@ -1,4 +1,10 @@
+/*
+* The encryption Algorithms are inspired 
+* by Adafruit's TinyLoRa
+* https://github.com/adafruit/TinyLoRa
+*/
 #include "encrypt.h"
+
 
 void encrypt_payload(uint8_t *data, uint8_t data_length, unsigned int frame_counter, uint8_t direction, uint8_t *dev_addr, uint8_t *AppSkey) {
     uint8_t i = 0x00;

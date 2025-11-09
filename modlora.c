@@ -23,7 +23,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(lora_info_obj, lora_info);
 enum { ARG_mode, ARG_region };
 static const mp_arg_t lora_allowed_args[] = {
     { MP_QSTR_mode,     MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = -1} },
-    { MP_QSTR_region,   MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = -1} },
+    { MP_QSTR_region,   MP_ARG_INT, {.u_int = LORA_REGION_EU868} },
 };
 
 //Class
@@ -63,6 +63,7 @@ static mp_obj_t lora_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     return MP_OBJ_FROM_PTR(self);
 }
 
+//// print()
 static void lora_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) { 
     _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_printf(print, "LoRa(mode=%d, region=%d)", self->mode, self->region);
@@ -88,6 +89,8 @@ MP_DEFINE_CONST_FUN_OBJ_2(lora_LoRa_send_obj, lora_LoRa_send);
 
 //// LoRa.recv()
 static mp_obj_t lora_LoRa_recv(mp_obj_t self_in) {
+    _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    if(self->mode==LORA_MODE_LORAWAN) return mp_const_none;
     uint8_t data[256];
     size_t len = sizeof(data);
     esp_err_t esp_err = sx1276_rx_single(data, &len);
@@ -103,7 +106,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_recv_obj, lora_LoRa_recv);
 //// LoRa.frequency()
 static mp_obj_t lora_LoRa_frequency(size_t n_args, const mp_obj_t *args) {
     _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-
+    if(self->mode==LORA_MODE_LORAWAN) return mp_const_none;
     if (n_args == 1) {
         // Getter
         uint32_t frequency = get_chip_frequency();
@@ -119,6 +122,48 @@ static mp_obj_t lora_LoRa_frequency(size_t n_args, const mp_obj_t *args) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lora_LoRa_frequency_obj,1, 2, lora_LoRa_frequency);
 
+
+//// LoRa.sf()
+static mp_obj_t lora_LoRa_sf(size_t n_args, const mp_obj_t *args) {
+    _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    if(self->mode==LORA_MODE_LORAWAN) return mp_const_none;
+    if (n_args == 1) {
+        // Getter
+        uint8_t sf = get_sf();
+        return mp_obj_new_int(sf);
+    } else if (n_args == 2) {
+        // Setter
+        uint8_t sf = mp_obj_get_int(args[1]);
+        set_sf(sf);
+        return mp_const_none;
+    }
+    // If any other argument ...
+    mp_raise_TypeError(MP_ERROR_TEXT("Wrong number of arguments"));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lora_LoRa_sf_obj,1, 2, lora_LoRa_sf);
+
+//// LoRa.bandwidth()
+static mp_obj_t lora_LoRa_bandwidth(size_t n_args, const mp_obj_t *args) {
+    _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+    if(self->mode==LORA_MODE_LORAWAN) return mp_const_none;
+    if (n_args == 1){
+        // Getter
+        uint8_t bw = get_bw();
+        return mp_obj_new_int(bw);
+    } else if (n_args == 2) {
+        // Setter
+        uint8_t bw = mp_obj_get_int(args[1]);
+        set_bw(bw);
+        return mp_const_none;
+    }
+    // If any other argument ...
+    mp_raise_TypeError(MP_ERROR_TEXT("Wrong number of arguments"));
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(lora_LoRa_bandwidth_obj,1, 2, lora_LoRa_bandwidth);
+
+
+
+
 //// LoRa.deinit()
 static mp_obj_t lora_LoRa_deinit(mp_obj_t self_in) {
         _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -130,7 +175,7 @@ static mp_obj_t lora_LoRa_deinit(mp_obj_t self_in) {
 MP_DEFINE_CONST_FUN_OBJ_1(lora_LoRa_deinit_obj, lora_LoRa_deinit);
 
 
-//// LoRa.auth
+//// LoRa.authenticate
 static mp_obj_t lora_LoRa_auth(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args){
     enum { ARG_dev_addr, ARG_nwk_skey, ARG_app_skey };
     static const mp_arg_t allowed_args[] = {
@@ -142,6 +187,7 @@ static mp_obj_t lora_LoRa_auth(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     // Parse args
     mp_arg_val_t args_out[MP_ARRAY_SIZE(allowed_args)];
     _lora_LoRa_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
+    if(self->mode == LORA_MODE_LORA) return mp_const_none;
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args,
                      MP_ARRAY_SIZE(allowed_args), allowed_args, args_out);
 
@@ -203,11 +249,23 @@ static const mp_rom_map_elem_t lora_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_LORA), MP_ROM_INT(LORA_MODE_LORA) },
     { MP_ROM_QSTR(MP_QSTR_LORAWAN), MP_ROM_INT(LORA_MODE_LORAWAN) },
     { MP_ROM_QSTR(MP_QSTR_EU868), MP_ROM_INT(LORA_REGION_EU868) },
+    { MP_ROM_QSTR(MP_QSTR_BW_7K8), MP_ROM_INT(BW_7K8) },
+    { MP_ROM_QSTR(MP_QSTR_BW_10K4), MP_ROM_INT(BW_10K4) },
+    { MP_ROM_QSTR(MP_QSTR_BW_15K6), MP_ROM_INT(BW_15K6) },
+    { MP_ROM_QSTR(MP_QSTR_BW_20K8), MP_ROM_INT(BW_20K8) },
+    { MP_ROM_QSTR(MP_QSTR_BW_31K25), MP_ROM_INT(BW_31K25) },
+    { MP_ROM_QSTR(MP_QSTR_BW_41K7), MP_ROM_INT(BW_41K7) },
+    { MP_ROM_QSTR(MP_QSTR_BW_62K5), MP_ROM_INT(BW_62K5) },
+    { MP_ROM_QSTR(MP_QSTR_BW_125K), MP_ROM_INT(BW_125K) },
+    { MP_ROM_QSTR(MP_QSTR_BW_20K8), MP_ROM_INT(BW_20K8) },
+    { MP_ROM_QSTR(MP_QSTR_BW_250K), MP_ROM_INT(BW_250K) },
 
     
     { MP_ROM_QSTR(MP_QSTR_send), MP_ROM_PTR(&lora_LoRa_send_obj) },
     { MP_ROM_QSTR(MP_QSTR_recv), MP_ROM_PTR(&lora_LoRa_recv_obj) },
     { MP_ROM_QSTR(MP_QSTR_frequency), MP_ROM_PTR(&lora_LoRa_frequency_obj) },
+    { MP_ROM_QSTR(MP_QSTR_sf), MP_ROM_PTR(&lora_LoRa_sf_obj) },
+    { MP_ROM_QSTR(MP_QSTR_bandwidth), MP_ROM_PTR(&lora_LoRa_bandwidth_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&lora_LoRa_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_authenticate), MP_ROM_PTR(&lora_LoRa_auth_obj) },
     

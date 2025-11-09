@@ -2,11 +2,11 @@
 
 uint16_t frame_counter = 0;
 
-void set_datarate(datarates_t datarate) {
+void set_datarate(datarates_t datarate){
     uint8_t sf;
     uint8_t bw;
     uint8_t ldro;
-    switch (datarate) {
+    switch (datarate){
         case DR0:
             sf = SF_12;
             bw = BW_125K;

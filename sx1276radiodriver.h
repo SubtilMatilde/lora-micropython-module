@@ -81,6 +81,7 @@
 #define PA_DEFAULT_POWER  0x84
 
 // Bandwidth
+/*
 #define BW_7K8   0x00
 #define BW_10K4  0x10
 #define BW_15K6  0x20   //0b00100000
@@ -91,6 +92,7 @@
 #define BW_125K  0x70   //0b01110000
 #define BW_250K  0x80   //0b10000000
 #define BW_500K  0x90   //0b10010000
+*/
 
 // Coding Rate
 #define CR_45 0x02      //0b00000010
@@ -140,7 +142,19 @@
 #define AGC_LNA      0x00
 #define AGC_LOOP     0x04
 
-
+//BW ENUM
+typedef enum {
+    BW_7K8 = 0x00,
+    BW_10K4 = 0x10,
+    BW_15K6 = 0x20,  
+    BW_20K8 = 0x30,
+    BW_31K25 = 0x40,
+    BW_41K7 = 0x50,
+    BW_62K5 = 0x60,
+    BW_125K = 0x70,
+    BW_250K = 0x80,
+    BW_500K = 0x90
+} lora_bandwidth_t;
 
 
 // Useful Struct to hold info
@@ -150,7 +164,7 @@ typedef struct {
     uint16_t preamble;
     uint16_t symb_timeout;
     uint8_t spreading_factor;
-    uint8_t bandwidth;
+    lora_bandwidth_t bandwidth;
     uint8_t coding_rate;
     uint8_t crc;
     uint8_t header_on;
@@ -158,6 +172,8 @@ typedef struct {
     uint8_t pa_select;
     uint8_t sync_word;
 } sx1276_state_t;
+
+
 
 // Functions' Prototypes
 esp_err_t sx1276_init();
@@ -184,8 +200,8 @@ unsigned int get_chip_preamble();
 void set_sf(uint8_t value);
 uint8_t get_sf();
 
-void set_bw(uint8_t value);
-uint8_t get_bw();
+void set_bw(lora_bandwidth_t value);
+lora_bandwidth_t get_bw();
 
 void set_sync_word(uint8_t sync_word);
 

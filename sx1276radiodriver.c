@@ -402,11 +402,13 @@ uint8_t get_sf(){
     return sx1276_state.spreading_factor;
 }
 
-
-
-void set_bw(uint8_t value){
+void set_bw(lora_bandwidth_t value){
     sx1276_write_register(REG_1D_MODEM_CONFIG1, value | sx1276_state.coding_rate | sx1276_state.header_on);
     sx1276_state.bandwidth = value;
+}
+
+lora_bandwidth_t get_bw(){
+    return sx1276_state.bandwidth;
 }
 
 void set_sync_word(uint8_t sync_word){
